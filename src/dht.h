@@ -24,7 +24,6 @@ typedef struct
 typedef struct 
 {
 	node_info_t info;
-	int socket_fd;
 	table_t table;
 }dht_t;
 

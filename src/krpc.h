@@ -2,7 +2,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <sys/socket.h>
 #include "defs.h"
+#include "dht.h"
 //////////////////////////////////////
 //			krpc消息				//
 //////////////////////////////////////
@@ -16,6 +18,7 @@ typedef struct
 
 typedef struct 
 {	
+	int socket_fd;
 	unsigned short cur_t;
 	char * msg_type[T_MAX];
 }krpc_t;
@@ -186,29 +189,30 @@ typedef struct
 
 
 
-int bencode_query(krpc_msg_t msg, buffer_stream_t * bs)
+int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
 {
 	buffer_stream_printf(bs,"d1:ad2:id20:");
-	buffer_stream_printf_node_id(bs, msg.a.id);
-	if (msg.q == _ping) {
+	buffer_stream_printf_node_id(bs, msg->a.id);
 
-	}else if (msg.q == _find_node) {
+	if (msg->q == _ping) {
+
+	}else if (msg->q == _find_node) {
 		buffer_stream_printf(bs, "6:target20:");
-		buffer_stream_printf_node_id(bs, msg.a.target);
+		buffer_stream_printf_node_id(bs, msg->a.target);
 		buffer_stream_printf(bs,"e");
-	}else if (msg.q == _get_peers) {
+	}else if (msg->q == _get_peers) {
 
-	}else if (msg.q == _announce_peer) {
+	}else if (msg->q == _announce_peer) {
 
 	}
-	if (!msg.q) return 0;
-	int op_len = strlen(msg.q);
-	buffer_stream_printf(bs, "1:q%d:%s", op_len, msg.q);
+	if (!msg->q) return 0;
+	int op_len = strlen(msg->q);
+	buffer_stream_printf(bs, "1:q%d:%s", op_len, msg->q);
 	return 1;
 }
 
 
-int bdecode_response(buffer_stream_t * bs, krpc_msg_t * msg)
+krpc_msg_t * bdecode_response(buffer_stream_t * bs, krpc_msg_t * msg)
 {
 	if (!bs || !msg) return 0;
 	if (!buffer_stream_match(bs, "d2:id20:")) {
@@ -217,37 +221,72 @@ int bdecode_response(buffer_stream_t * bs, krpc_msg_t * msg)
 
 	byte_t id[ID_LEN] = {0};
 	buffer_stream_read(bs, id, ID_LEN);
-	
+
 }
 
-int bdecode(buffer_stream_t * bs, krpc_msg_t * msg)
+krpc_msg_t * bdecode(buffer_stream_t * bs)
 {
-	if (!bs || !msg) return 0;
+	if (!bs ) return 0;
 	int tab = 0;
 	if (!buffer_stream_match(bs, "d1:")) {
 		return 0;
 	}
 	switch(buffer_stream_getch(bs)) {
 		case 'r':
-			msg->y = _r;
-			bdecode_response(bs, msg);
+			{
+				buffer_stream_match(bs, "");
+			}
 			break;
 	}
 	return 0;
 }
 
-int bencode(krpc_msg_t msg, buffer_stream_t * bs)
+int krpc_bencode(krpc_t * this, krpc_msg_t * msg, buffer_stream_t * bs)
 {
 	if (!bs) return 0;
-	if (msg.y == _q) {
+	if (msg->y == _q) {
+		this->msg_type[msg->t] = msg->y;
 		bencode_query(msg, bs);
-		buffer_stream_printf(bs, "1:t2:%c%c",((char*)&msg.t)[0], ((char*)&msg.t)[0]);
-		buffer_stream_printf(bs,"1:y1:%se", msg.y);
-	}else if (msg.y == _r) {
-	}else if (msg.y == _e) {
+		buffer_stream_printf(bs, "1:t2:%c%c",((char*)&msg->t)[0], ((char*)&msg->t)[0]);
+		buffer_stream_printf(bs,"1:y1:%se", msg->y);
+	}else if (msg->y == _r) {
+	}else if (msg->y == _e) {
 	}
 
 	return 1;
 }
 
 
+int krpc_init(krpc_t * this, unsigned short port)
+{
+	this->cur_t = 0;	
+	this->socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (this->socket_fd < 0) {
+		perror("socket");
+		return 0;
+	}
+
+	sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(port);
+
+	int err = bind(this->socket_fd, (sockaddr*)&addr, sizeof(addr));
+	if (err) {
+		perror("bind");
+		return 0;
+	}
+
+	memset(this->msg_type, 0, T_MAX);
+	return 1;
+}
+
+void krpc_send(krpc_t * this, krpc_msg_t * msg, node_info_t target)
+{
+	if (this->msg_type[this->cur_t]) {
+		debug("无可用消息号");
+		return;
+	}
+	msg->t =this->cur_t;
+	this->msg_type[msg->t] = msg->y;
+}
