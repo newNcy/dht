@@ -1,6 +1,7 @@
 
 
 #include <arpa/inet.h>
+#include <stdint.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,11 +15,13 @@
 #include <fcntl.h>
 #include <openssl/sha.h>
 #include "dht.h"
+
+
+
 byte_t rand_byte()
 {
 	return  rand() % (0xff+1);
 }
-
 
 void gen_node_id(byte_t * id)
 {
@@ -31,9 +34,6 @@ void gen_node_id(byte_t * id)
 		id[i] = rand_byte();
 	}
 }
-
-
-
 
 void print_ip(ip4_t _ip)
 {
@@ -66,8 +66,6 @@ ip4_t get_ip_by_name(const char * name)
 	char * addr = host->h_addr_list[0];
 	return *(ip4_t*)addr;
 }
-
-
 
 int dht_init(dht_t * this)
 {
@@ -106,7 +104,7 @@ int main (int argc, char * argv[])
 {
 	srand(time(0));
 	handle_signal();
-	
+
 	dht_t dht;
 	int ok = dht_init(&dht);
 	if (!ok) return 0;

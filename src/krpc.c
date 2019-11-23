@@ -1,16 +1,20 @@
 #include "dht.h"
-/*
-extern char * const _q;
-extern char * const _r;
-extern char * const _e;
-extern char * const _failed;
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
-extern char * const _ping;
-extern char * const _find_node;
-extern char * const _get_peers;
-extern char * const _announce_peer;
 
-*/
+char * const _q		= "q";
+char * const _r		= "r";
+char * const _e		= "e";
+char * const _failed = "failed";
+
+char * const _ping			= "ping";
+char * const _find_node		= "find_node";
+char * const _get_peers		= "get_peers";
+char * const _announce_peer	= "announce_peer";
+
+
+
 void buffer_stream_init(buffer_stream_t * this)
 {
 	if (!this) return;
@@ -180,7 +184,22 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 
 				if (buffer_stream_match(bs, "5:nodes")) {
 					int bytes_count = buffer_stream_get_int(bs);
+					int node_size = sizeof(compacked_node_info_t);
+					ret->r.nodes_count = bytes_count/node_size;
+					ret = realloc(ret, sizeof(krpc_msg_t) + bytes_count);
+					buffer_stream_read(bs, (byte_t*)ret->r.nodes, bytes_count);
 					debug("nodes_count = %d/%ld=%ld", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t));
+					for (int i = 0 ;  i< ret->r.nodes_count; i++) {
+						buffer_stream_t log;
+						buffer_stream_init(&log);
+						buffer_stream_printf(&log, "node[%d] ", i);
+						buffer_stream_print_hex(&log, ret->r.nodes[i].id, ID_LEN);
+						buffer_stream_printf(&log, ":");
+						buffer_stream_print_ip(&log, ret->r.nodes[i].peer.ip);
+						buffer_stream_printf(&log, ":%d", ntohs(ret->r.nodes[i].peer.port));
+						debug("%s", log.buf);
+					}
+					
 				}else if (buffer_stream_match(bs, "5:peers")) {
 				}
 			}

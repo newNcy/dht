@@ -36,18 +36,17 @@ typedef struct
 	int socket_fd;
 	unsigned short cur_t;
 	char * msg_type[T_MAX];
-}krpc_t;
+}krpc_t; 
 
+char * const _q;
+char * const _r;
+char * const _e;
+char * const _failed;
 
-static char * const _q		= "q";
-static char * const _r		= "r";
-static char * const _e		= "e";
-static char * const _failed = "failed";
-
-static char * const _ping			= "ping";
-static char * const _find_node		= "find_node";
-static char * const _get_peers		= "get_peers";
-static char * const _announce_peer	= "announce_peer";
+char * const _ping;
+char * const _find_node;
+char * const _get_peers;
+char * const _announce_peer;
 
 typedef struct
 {
@@ -63,13 +62,13 @@ typedef struct
 {
 	ip4_t ip;
 	unsigned short port;
-}compacked_peer_info_t __attribute__((aligned(1)));
+}__attribute__((packed)) compacked_peer_info_t ;
 
 typedef struct //in network byte order
 {
 	byte_t id[ID_LEN];
 	compacked_peer_info_t peer;
-}compacked_node_info_t __attribute__((aligned(1)));
+}__attribute__((packed)) compacked_node_info_t ;
 
 
 typedef struct bucket_t
@@ -150,9 +149,6 @@ typedef struct
 		error_t e;
 	};
 }krpc_msg_t;
-
-
-
 
 
 
