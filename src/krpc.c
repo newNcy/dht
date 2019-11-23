@@ -1,47 +1,16 @@
-#pragma once
-#include <string.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <sys/socket.h>
-#include "defs.h"
 #include "dht.h"
-//////////////////////////////////////
-//			krpc消息				//
-//////////////////////////////////////
-typedef struct
-{
-	byte_t node_id[ID_LEN];
-	ip4_t ip;
-	unsigned short port;
-}compacked_node_info __attribute__((aligned(1)));
+/*
+extern char * const _q;
+extern char * const _r;
+extern char * const _e;
+extern char * const _failed;
 
+extern char * const _ping;
+extern char * const _find_node;
+extern char * const _get_peers;
+extern char * const _announce_peer;
 
-typedef struct 
-{	
-	int socket_fd;
-	unsigned short cur_t;
-	char * msg_type[T_MAX];
-}krpc_t;
-
-
-static char * const _q		= "q";
-static char * const _r		= "r";
-static char * const _e		= "e";
-static char * const _failed = "failed";
-
-static char * const _ping			= "ping";
-static char * const _find_node		= "find_node";
-static char * const _get_peers		= "get_peers";
-static char * const _announce_peer	= "announce_peer";
-
-typedef struct
-{
-	char buf[MSG_LEN_MAX];
-	int r_pos;
-	int w_pos;
-	int len;
-}buffer_stream_t;
-
+*/
 void buffer_stream_init(buffer_stream_t * this)
 {
 	if (!this) return;
@@ -50,19 +19,6 @@ void buffer_stream_init(buffer_stream_t * this)
 	this->len = MSG_LEN_MAX;
 	memset(this->buf, 0, this->len);
 }
-
-int buffer_stream_scanf(buffer_stream_t * this, const char * f, ...)
-{
-	if (!this || !f) return 0;
-	if (this->r_pos >= this->w_pos) return 0;
-	va_list va; 
-	va_start (va, f);       
-	int ret = this->r_pos += vsscanf(this->buf + this->r_pos, f , va); 
-	va_end(va); 
-	return ret;
-
-}
-
 int buffer_stream_printf(buffer_stream_t * this,const char *f, ...)
 {
 	if (!this || !f) return 0;
@@ -104,6 +60,23 @@ char buffer_stream_getch(buffer_stream_t * this)
 	return this->buf[this->r_pos++];
 }
 
+int buffer_stream_get_int(buffer_stream_t * this)
+{
+	if (!this) return 0;
+
+	int ret = atoi(this->buf + this->r_pos);
+	for (;;) {
+		char c = buffer_stream_getch(this);
+		if ( '0' > c || c > '9') {
+			this->r_pos --;
+			break;
+		} 
+	}
+
+	return ret;
+}
+
+
 int buffer_stream_read(buffer_stream_t * this, byte_t * buf, int len)
 {
 	if (!this || !buf || len <=0 || this->r_pos == this->w_pos) return 0;
@@ -114,13 +87,24 @@ int buffer_stream_read(buffer_stream_t * this, byte_t * buf, int len)
 	return len;
 }
 
+typedef enum {
+	MATCH_MOVE,
+	MATCH_PEEK,
+	MATCH_MOVE_IF
+}match_type_t;
+
 int buffer_stream_match(buffer_stream_t * this, char * prefix)
 {
 	if (!prefix) return 0;
 	if (!this || this->r_pos >= this->w_pos) return 0;
-	while (*prefix && this->r_pos < this->w_pos) {
-		if (*prefix != this->buf[this->r_pos++]) return 0;
+
+	int pos = this->r_pos;
+	while (*prefix && pos < this->w_pos) {
+		if (*prefix++ != this->buf[pos++]) {
+			return 0;
+		}
 	}
+	this->r_pos = pos;
 	return 1;
 }
 
@@ -129,6 +113,7 @@ int buffer_stream_value(buffer_stream_t * this)
 	if (!this || this->r_pos > this->r_pos) return 0;
 	return this->w_pos - this->r_pos;
 }
+
 void buffer_stream_dump_hex(buffer_stream_t * this)
 {
 	if (!this) return;
@@ -138,56 +123,6 @@ void buffer_stream_dump_hex(buffer_stream_t * this)
 	}
 	printf("\n");
 }
-
-typedef struct
-{
-	byte_t id[ID_LEN]; //ping
-	union 
-	{
-		byte_t target[ID_LEN]; //find_node
-		struct 
-		{
-			byte_t info_hash[ID_LEN];	// get_peers
-			struct {					//announce_peer
-				unsigned short port;
-				int token_len;
-				char token[];
-			};
-		};
-	};
-}query_t;
-
-typedef union 
-{
-	struct 
-	{
-		byte_t id[ID_LEN];
-	};
-
-
-}response_t;
-
-typedef struct
-{
-}error_t;
-
-
-typedef struct 
-{
-	unsigned short t;
-	char * y;
-	union 
-	{
-		struct {
-			char * q;
-			query_t a;
-		};
-		response_t r;
-		error_t e;
-	};
-}krpc_msg_t;
-
-
 
 int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
 {
@@ -224,17 +159,30 @@ krpc_msg_t * bdecode_response(buffer_stream_t * bs, krpc_msg_t * msg)
 
 }
 
-krpc_msg_t * bdecode(buffer_stream_t * bs)
+krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 {
 	if (!bs ) return 0;
 	int tab = 0;
 	if (!buffer_stream_match(bs, "d1:")) {
 		return 0;
 	}
+
+	krpc_msg_t * ret = (krpc_msg_t*)malloc(sizeof(krpc_msg_t));
 	switch(buffer_stream_getch(bs)) {
 		case 'r':
 			{
-				buffer_stream_match(bs, "");
+				debug("match this");
+				ret->y = _r;
+				if (!buffer_stream_match(bs, "d2:id20:")) {
+					return 0;
+				}
+				buffer_stream_read(bs, ret->r.id, ID_LEN);
+
+				if (buffer_stream_match(bs, "5:nodes")) {
+					int bytes_count = buffer_stream_get_int(bs);
+					debug("nodes_count = %d/%ld=%ld", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t));
+				}else if (buffer_stream_match(bs, "5:peers")) {
+				}
 			}
 			break;
 	}
@@ -247,7 +195,8 @@ int krpc_bencode(krpc_t * this, krpc_msg_t * msg, buffer_stream_t * bs)
 	if (msg->y == _q) {
 		this->msg_type[msg->t] = msg->y;
 		bencode_query(msg, bs);
-		buffer_stream_printf(bs, "1:t2:%c%c",((char*)&msg->t)[0], ((char*)&msg->t)[0]);
+		buffer_stream_printf(bs, "1:t2:%c%c", ((char*)&msg->t)[0], ((char*)&msg->t)[1]);
+		//buffer_stream_print_hex(bs, (byte_t*)&msg->t, 2);
 		buffer_stream_printf(bs,"1:y1:%se", msg->y);
 	}else if (msg->y == _r) {
 	}else if (msg->y == _e) {
@@ -281,12 +230,46 @@ int krpc_init(krpc_t * this, unsigned short port)
 	return 1;
 }
 
-void krpc_send(krpc_t * this, krpc_msg_t * msg, node_info_t target)
+krpc_msg_t * krpc_recv(krpc_t * this)
+{
+	buffer_stream_t ret_stream;
+	buffer_stream_init(&ret_stream);
+
+	sockaddr_in remote;
+	socklen_t len = sizeof(remote);
+	int rc = recvfrom(this->socket_fd, ret_stream.buf, ret_stream.len, 0, (sockaddr*)&remote, &len);
+	ret_stream.w_pos = rc;
+	if (rc <= 0) return NULL;
+	debug("recv from %s:%d %d bytes", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), rc);
+	debug("%s", ret_stream.buf);
+	return krpc_bdecode(this, &ret_stream);
+}
+
+void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target)
 {
 	if (this->msg_type[this->cur_t]) {
 		debug("无可用消息号");
 		return;
 	}
-	msg->t =this->cur_t;
+	msg->t = this->cur_t;
 	this->msg_type[msg->t] = msg->y;
+	this->cur_t = (this->cur_t+1)%T_MAX;
+
+	buffer_stream_t data;
+	buffer_stream_init(&data);
+	krpc_bencode(this, msg, &data);
+
+	sockaddr_in remote;
+	remote.sin_family = AF_INET;
+	remote.sin_addr.s_addr = target.peer.ip;
+	remote.sin_port = target.peer.port;
+
+	int sc = sendto(this->socket_fd, data.buf, data.w_pos, 0, (sockaddr*)&remote, sizeof(remote)); 
+	if (sc <= 0) {
+		debug("send faild %d",sc);
+		perror("sendto");
+	}else {
+		debug("send to %s:%d %d bytes", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port),  sc);
+		debug("%s",data.buf);
+	}
 }

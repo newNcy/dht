@@ -13,9 +13,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
-#include "defs.h"
 #include "dht.h"
-#include "krpc.h"
 byte_t rand_byte()
 {
 	return  rand() % (0xff+1);
@@ -35,12 +33,6 @@ void gen_node_id(byte_t * id)
 }
 
 
-int node_compare(node_info_t a, node_info_t b)
-{
-	for (int i = 0; i < ID_LEN; i++) {
-	}
-	return 0;
-}
 
 
 void print_ip(ip4_t _ip)
@@ -62,7 +54,7 @@ void print_hex(byte_t * bytes, int len)
 	printf("\n");
 }
 
-void print_node_id(node_info_t node)
+void print_node_id(compacked_node_info_t node)
 {
 	print_hex(node.id, ID_LEN);
 }
@@ -102,7 +94,7 @@ void handle_signal()
 static const struct 
 {
 	char * host_name;
-	unsigned short post;
+	unsigned short port;
 }
 boostrap_nodes [] =
 {
@@ -114,8 +106,7 @@ int main (int argc, char * argv[])
 {
 	srand(time(0));
 	handle_signal();
-
-
+	
 	dht_t dht;
 	int ok = dht_init(&dht);
 	if (!ok) return 0;
@@ -126,13 +117,14 @@ int main (int argc, char * argv[])
 
 	buffer_stream_t bs;
 	buffer_stream_init(&bs);
+
+
 	buffer_stream_print_hex(&bs, dht.info.id, ID_LEN);
 
 	ip4_t ip = get_ip_by_name(boostrap_nodes[0].host_name);
-	node_info_t target;
-	target.addr.sin_family = AF_INET;
-	target.addr.sin_addr.s_addr = ip;
-	target.addr.sin_port = htons(boostrap_nodes[0].post);
+	compacked_node_info_t target;
+	target.peer.ip= ip;
+	target.peer.port = htons(boostrap_nodes[0].port);
 
 
 
@@ -144,5 +136,8 @@ int main (int argc, char * argv[])
 	strncpy((char*)msg.a.target, (char*)dht.info.id, ID_LEN);
 
 	krpc_send(&krpc, &msg, target);
+	while(1) {
+		krpc_msg_t * ret = krpc_recv(&krpc);
+	}
 	return 0;
 }
