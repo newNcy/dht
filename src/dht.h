@@ -104,6 +104,7 @@ typedef struct
 			byte_t info_hash[ID_LEN];	// get_peers
 			struct 
 			{					//announce_peer
+				int implied_port;
 				unsigned short port;
 				byte_t token[TOKEN_LEN_MAX];
 			};
@@ -163,7 +164,7 @@ int buffer_stream_get_int(buffer_stream_t * this);
 int buffer_stream_read(buffer_stream_t * this, byte_t * buf, int len);
 int buffer_stream_match(buffer_stream_t * this, char * prefix);
 int buffer_stream_value(buffer_stream_t * this);
-void buffer_stream_dump_hex(buffer_stream_t * this);
+void buffer_stream_dump(buffer_stream_t * this);
 
 
 //////////////////////////////////////
@@ -172,4 +173,4 @@ void buffer_stream_dump_hex(buffer_stream_t * this);
 int krpc_init(krpc_t * this, unsigned short port);
 void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target);
 krpc_msg_t * krpc_recv(krpc_t * this);
-
+void krpc_recv_loop(krpc_t * this);

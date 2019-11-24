@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
+#include <unistd.h>
 #include "dht.h"
 
 
@@ -115,10 +116,8 @@ int main (int argc, char * argv[])
 
 	buffer_stream_t bs;
 	buffer_stream_init(&bs);
-
-
 	buffer_stream_print_hex(&bs, dht.info.id, ID_LEN);
-
+	
 	ip4_t ip = get_ip_by_name(boostrap_nodes[0].host_name);
 	compacked_node_info_t target;
 	target.peer.ip= ip;
@@ -128,14 +127,15 @@ int main (int argc, char * argv[])
 
 	krpc_msg_t msg = {
 		.y = _q,
-		.q = _find_node,
+		.q = _get_peers,
 	};
 	strncpy((char*)msg.a.id, (char*)dht.info.id, ID_LEN);
-	strncpy((char*)msg.a.target, (char*)dht.info.id, ID_LEN);
+	strncpy((char*)msg.a.info_hash, (char*)dht.info.id, ID_LEN);
 
-	krpc_send(&krpc, &msg, target);
-	while(1) {
-		krpc_msg_t * ret = krpc_recv(&krpc);
+	krpc_recv_loop(&krpc);
+	while (1) {
+		krpc_send(&krpc, &msg, target);
+		sleep(10);
 	}
 	return 0;
 }

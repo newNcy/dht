@@ -1,6 +1,7 @@
 #include "dht.h"
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <pthread.h>
 
 
 char * const _q		= "q";
@@ -85,9 +86,10 @@ int buffer_stream_read(buffer_stream_t * this, byte_t * buf, int len)
 {
 	if (!this || !buf || len <=0 || this->r_pos == this->w_pos) return 0;
 	if (len > this->w_pos - this->r_pos) len = this->w_pos - this->r_pos;
-	this->r_pos += len;
 
-	memcpy(buf, this->buf, len);
+	memcpy(buf, this->buf + this->r_pos, len);
+	
+	this->r_pos += len;
 	return len;
 }
 
@@ -104,7 +106,7 @@ int buffer_stream_match(buffer_stream_t * this, char * prefix)
 
 	int pos = this->r_pos;
 	while (*prefix && pos < this->w_pos) {
-		if (*prefix++ != this->buf[pos++]) {
+		if (*prefix++ != (0xff &this->buf[pos++])) {
 			return 0;
 		}
 	}
@@ -118,12 +120,21 @@ int buffer_stream_value(buffer_stream_t * this)
 	return this->w_pos - this->r_pos;
 }
 
-void buffer_stream_dump_hex(buffer_stream_t * this)
+void buffer_stream_dump(buffer_stream_t * this)
 {
 	if (!this) return;
-	printf("[%d]", this->w_pos);
+	int line_num = 20;
+	printf("[%d]\n", this->w_pos);
 	for (int i = 0; i < this->w_pos; i ++) {
-		printf("%02x", 0xff & this->buf[i]);
+		unsigned c = 0xff & this->buf[i];
+		if (0x20 <= c && c <= 0x7e) {
+			printf(" %c ", c);
+		}else {
+			printf("%02x ", c);
+		}
+		if ((i+1)%line_num == 0) {
+			printf("\n");
+		}
 	}
 	printf("\n");
 }
@@ -140,7 +151,9 @@ int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
 		buffer_stream_printf_node_id(bs, msg->a.target);
 		buffer_stream_printf(bs,"e");
 	}else if (msg->q == _get_peers) {
-
+		buffer_stream_printf(bs, "9info_hash20:");
+		buffer_stream_printf_node_id(bs, msg->a.info_hash);
+		buffer_stream_printf(bs,"e");
 	}else if (msg->q == _announce_peer) {
 
 	}
@@ -148,19 +161,6 @@ int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
 	int op_len = strlen(msg->q);
 	buffer_stream_printf(bs, "1:q%d:%s", op_len, msg->q);
 	return 1;
-}
-
-
-krpc_msg_t * bdecode_response(buffer_stream_t * bs, krpc_msg_t * msg)
-{
-	if (!bs || !msg) return 0;
-	if (!buffer_stream_match(bs, "d2:id20:")) {
-		return 0;
-	}
-
-	byte_t id[ID_LEN] = {0};
-	buffer_stream_read(bs, id, ID_LEN);
-
 }
 
 krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
@@ -175,7 +175,7 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 	switch(buffer_stream_getch(bs)) {
 		case 'r':
 			{
-				debug("match this");
+				debug("recv responese");
 				ret->y = _r;
 				if (!buffer_stream_match(bs, "d2:id20:")) {
 					return 0;
@@ -184,26 +184,36 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 
 				if (buffer_stream_match(bs, "5:nodes")) {
 					int bytes_count = buffer_stream_get_int(bs);
+					if (!buffer_stream_match(bs, ":")) {
+						return 0;
+					}
 					int node_size = sizeof(compacked_node_info_t);
 					ret->r.nodes_count = bytes_count/node_size;
 					ret = realloc(ret, sizeof(krpc_msg_t) + bytes_count);
-					buffer_stream_read(bs, (byte_t*)ret->r.nodes, bytes_count);
-					debug("nodes_count = %d/%ld=%ld", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t));
-					for (int i = 0 ;  i< ret->r.nodes_count; i++) {
-						buffer_stream_t log;
-						buffer_stream_init(&log);
-						buffer_stream_printf(&log, "node[%d] ", i);
-						buffer_stream_print_hex(&log, ret->r.nodes[i].id, ID_LEN);
-						buffer_stream_printf(&log, ":");
-						buffer_stream_print_ip(&log, ret->r.nodes[i].peer.ip);
-						buffer_stream_printf(&log, ":%d", ntohs(ret->r.nodes[i].peer.port));
-						debug("%s", log.buf);
-					}
-					
+					int rc = buffer_stream_read(bs, (byte_t*)ret->r.nodes, bytes_count);
+					debug("nodes_count = %d/%ld=%ld, rc=%d", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t), rc);
 				}else if (buffer_stream_match(bs, "5:peers")) {
+					int bytes_count = buffer_stream_get_int(bs);
+					ret = realloc(ret, sizeof(krpc_t) + bytes_count);
+					ret->r.peers_count = bytes_count/sizeof(compacked_peer_info_t);
+					int rc = buffer_stream_read(bs, (byte_t*)ret->r.peers, bytes_count);
 				}
+
+				if (buffer_stream_match(bs, "e1:")) {
+						debug("response end");	
+					}else {
+						char c = buffer_stream_getch(bs);
+						debug("%c %d", c, c);
+					}
+
 			}
 			break;
+		case 'q':
+			debug("recv query");
+		case 'e':
+			debug("recv error");
+			break;
+
 	}
 	return 0;
 }
@@ -260,7 +270,7 @@ krpc_msg_t * krpc_recv(krpc_t * this)
 	ret_stream.w_pos = rc;
 	if (rc <= 0) return NULL;
 	debug("recv from %s:%d %d bytes", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), rc);
-	debug("%s", ret_stream.buf);
+	buffer_stream_dump(&ret_stream);
 	return krpc_bdecode(this, &ret_stream);
 }
 
@@ -289,6 +299,20 @@ void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target)
 		perror("sendto");
 	}else {
 		debug("send to %s:%d %d bytes", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port),  sc);
-		debug("%s",data.buf);
+		buffer_stream_dump(&data);
 	}
 }
+void * krpc_background_loop(krpc_t * this)
+{
+	while (1) {
+		krpc_recv(this);
+	}
+}
+
+void krpc_recv_loop(krpc_t * this)
+{
+	pthread_t thread_id;
+	pthread_create(&thread_id, NULL, (void*(*)(void*))krpc_background_loop, this);
+	debug("thread id: %ld", thread_id);
+}
+
