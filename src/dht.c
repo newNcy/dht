@@ -118,24 +118,22 @@ int main (int argc, char * argv[])
 	buffer_stream_init(&bs);
 	buffer_stream_print_hex(&bs, dht.info.id, ID_LEN);
 	
-	ip4_t ip = get_ip_by_name(boostrap_nodes[0].host_name);
-	compacked_node_info_t target;
-	target.peer.ip= ip;
-	target.peer.port = htons(boostrap_nodes[0].port);
-
-
 
 	krpc_msg_t msg = {
 		.y = _q,
-		.q = _get_peers,
+		.q = _find_node,
 	};
 	strncpy((char*)msg.a.id, (char*)dht.info.id, ID_LEN);
 	strncpy((char*)msg.a.info_hash, (char*)dht.info.id, ID_LEN);
 
 	krpc_recv_loop(&krpc);
-	while (1) {
+	
+	for (int i = 0; i < sizeof(boostrap_nodes)/sizeof(boostrap_nodes[0]); i++) {
+		compacked_node_info_t target = {0};
+		target.peer.ip = get_ip_by_name(boostrap_nodes[i].host_name);
+		target.peer.port = htons(boostrap_nodes[i].port);
 		krpc_send(&krpc, &msg, target);
-		sleep(10);
 	}
+	while(1);
 	return 0;
 }

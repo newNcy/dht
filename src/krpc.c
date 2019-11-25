@@ -192,6 +192,20 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 					ret = realloc(ret, sizeof(krpc_msg_t) + bytes_count);
 					int rc = buffer_stream_read(bs, (byte_t*)ret->r.nodes, bytes_count);
 					debug("nodes_count = %d/%ld=%ld, rc=%d", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t), rc);
+					krpc_msg_t msg = {
+						.y = _q,
+						.q = _find_node,
+					};
+					strncpy((char*)msg.a.id, (char*)ret->r.id, ID_LEN);
+					strncpy((char*)msg.a.info_hash, (char*)ret->r.id, ID_LEN);
+
+					for (int i = 0 ; i < ret->r.nodes_count; i++) {
+						//krpc_send(this, &msg, ret->r.nodes[i]);
+						buffer_stream_t log;
+						buffer_stream_init(&log);
+						buffer_stream_print_ip(&log, ret->r.nodes[i].peer.ip);
+						debug("%s:%d", log.buf, ntohs(ret->r.nodes[i].peer.port));
+					}
 				}else if (buffer_stream_match(bs, "5:peers")) {
 					int bytes_count = buffer_stream_get_int(bs);
 					ret = realloc(ret, sizeof(krpc_t) + bytes_count);
@@ -200,11 +214,11 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 				}
 
 				if (buffer_stream_match(bs, "e1:")) {
-						debug("response end");	
-					}else {
-						char c = buffer_stream_getch(bs);
-						debug("%c %d", c, c);
-					}
+					debug("response end");	
+				}else {
+					char c = buffer_stream_getch(bs);
+					debug("%c %d", c, c);
+				}
 
 			}
 			break;
@@ -213,6 +227,8 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 		case 'e':
 			debug("recv error");
 			break;
+		default:
+			debug("unkow msgtype");
 
 	}
 	return 0;
