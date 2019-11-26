@@ -31,13 +31,6 @@ typedef int32_t ip4_t;
 //////////////////////////////////////
 
 
-typedef struct 
-{	
-	int socket_fd;
-	unsigned short cur_t;
-	char * msg_type[T_MAX];
-}krpc_t; 
-
 char * const _q;
 char * const _r;
 char * const _e;
@@ -115,7 +108,9 @@ typedef struct
 typedef	struct 
 {
 	byte_t id[ID_LEN]; //ping ret
+	int token_len;
 	byte_t token[TOKEN_LEN_MAX];
+	int with_peers;
 	union 
 	{
 		struct 
@@ -153,6 +148,29 @@ typedef struct
 
 
 
+typedef int (*krpc_callback_t) (void * owner, krpc_msg_t * msg);
+
+typedef struct 
+{	
+	int socket_fd;
+	unsigned short cur_t;
+	char * msg_type[T_MAX];
+	void * callback_owner;
+	
+	krpc_callback_t on_ping;
+	krpc_callback_t on_find_node;
+	krpc_callback_t on_get_peers;
+	krpc_callback_t on_announce_peer;
+
+	krpc_callback_t on_ping_back;
+	krpc_callback_t on_find_node_back;
+	krpc_callback_t on_get_peers_back;
+	krpc_callback_t on_announce_peer_back;
+
+}krpc_t; 
+
+
+
 void buffer_stream_init(buffer_stream_t * this);
 int buffer_stream_printf(buffer_stream_t * this,const char *f, ...);
 void buffer_stream_print_hex(buffer_stream_t * this, byte_t * bytes, int len);
@@ -172,5 +190,5 @@ void buffer_stream_dump(buffer_stream_t * this);
 //////////////////////////////////////
 int krpc_init(krpc_t * this, unsigned short port);
 void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target);
-krpc_msg_t * krpc_recv(krpc_t * this);
+void krpc_recv(krpc_t * this);
 void krpc_recv_loop(krpc_t * this);

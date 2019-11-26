@@ -163,12 +163,12 @@ int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
 	return 1;
 }
 
-krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
+void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 {
-	if (!bs ) return 0;
+	if (!bs ) return;
 	int tab = 0;
 	if (!buffer_stream_match(bs, "d1:")) {
-		return 0;
+		return;
 	}
 
 	krpc_msg_t * ret = (krpc_msg_t*)malloc(sizeof(krpc_msg_t));
@@ -178,42 +178,51 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 				debug("recv responese");
 				ret->y = _r;
 				if (!buffer_stream_match(bs, "d2:id20:")) {
-					return 0;
+					return;
 				}
 				buffer_stream_read(bs, ret->r.id, ID_LEN);
 
+				krpc_callback_t callback = this->on_ping_back;
 				if (buffer_stream_match(bs, "5:nodes")) {
+					ret->r.with_peers = 0;
 					int bytes_count = buffer_stream_get_int(bs);
 					if (!buffer_stream_match(bs, ":")) {
-						return 0;
+						return;
 					}
 					int node_size = sizeof(compacked_node_info_t);
 					ret->r.nodes_count = bytes_count/node_size;
 					ret = realloc(ret, sizeof(krpc_msg_t) + bytes_count);
 					int rc = buffer_stream_read(bs, (byte_t*)ret->r.nodes, bytes_count);
 					debug("nodes_count = %d/%ld=%ld, rc=%d", bytes_count, sizeof(compacked_node_info_t), bytes_count/sizeof(compacked_node_info_t), rc);
-					krpc_msg_t msg = {
-						.y = _q,
-						.q = _find_node,
-					};
-					strncpy((char*)msg.a.id, (char*)ret->r.id, ID_LEN);
-					strncpy((char*)msg.a.info_hash, (char*)ret->r.id, ID_LEN);
 
-					for (int i = 0 ; i < ret->r.nodes_count; i++) {
-						//krpc_send(this, &msg, ret->r.nodes[i]);
-						buffer_stream_t log;
-						buffer_stream_init(&log);
-						buffer_stream_print_ip(&log, ret->r.nodes[i].peer.ip);
-						debug("%s:%d", log.buf, ntohs(ret->r.nodes[i].peer.port));
+					callback = this->on_find_node_back;
+					
+				}
+				if (buffer_stream_match(bs, "5:token")) {
+					ret->r.token_len = buffer_stream_get_int(bs);
+					if (ret->r.token_len <= 0 || ret->r.token_len >= TOKEN_LEN_MAX) {
+						debug("token string is too long:%d",ret->r.token_len);
+					}else {
+						buffer_stream_read(bs, ret->r.token, ret->r.token_len);
 					}
-				}else if (buffer_stream_match(bs, "5:peers")) {
+
+					if (callback == this->on_ping_back) { //说明没有nodes
+						callback = this->on_find_node_back;
+						ret->r.with_peers = 1;
+					}
+				}
+
+				if (buffer_stream_match(bs, "6:values")) {
 					int bytes_count = buffer_stream_get_int(bs);
 					ret = realloc(ret, sizeof(krpc_t) + bytes_count);
 					ret->r.peers_count = bytes_count/sizeof(compacked_peer_info_t);
 					int rc = buffer_stream_read(bs, (byte_t*)ret->r.peers, bytes_count);
 				}
 
-				if (buffer_stream_match(bs, "e1:")) {
+				if (buffer_stream_match(bs, "e1:t")) {
+					if (this->callback_owner &&  this->on_find_node_back) {
+						this->on_find_node_back(this->callback_owner, ret);
+					}
 					debug("response end");	
 				}else {
 					char c = buffer_stream_getch(bs);
@@ -222,7 +231,7 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 
 			}
 			break;
-		case 'q':
+		case 'a':
 			debug("recv query");
 		case 'e':
 			debug("recv error");
@@ -231,7 +240,6 @@ krpc_msg_t * krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 			debug("unkow msgtype");
 
 	}
-	return 0;
 }
 
 int krpc_bencode(krpc_t * this, krpc_msg_t * msg, buffer_stream_t * bs)
@@ -271,11 +279,24 @@ int krpc_init(krpc_t * this, unsigned short port)
 		return 0;
 	}
 
+	this->callback_owner = NULL;
+
+	this->on_ping			= NULL;
+	this->on_find_node		= NULL;
+	this->on_get_peers		= NULL;
+	this->on_announce_peer	= NULL;
+
+	this->on_ping_back			= NULL;
+	this->on_find_node_back		= NULL;
+	this->on_get_peers_back		= NULL;
+	this->on_announce_peer_back	= NULL;
+
+
 	memset(this->msg_type, 0, T_MAX);
 	return 1;
 }
 
-krpc_msg_t * krpc_recv(krpc_t * this)
+void krpc_recv(krpc_t * this)
 {
 	buffer_stream_t ret_stream;
 	buffer_stream_init(&ret_stream);
@@ -284,10 +305,10 @@ krpc_msg_t * krpc_recv(krpc_t * this)
 	socklen_t len = sizeof(remote);
 	int rc = recvfrom(this->socket_fd, ret_stream.buf, ret_stream.len, 0, (sockaddr*)&remote, &len);
 	ret_stream.w_pos = rc;
-	if (rc <= 0) return NULL;
+	if (rc <= 0) return;
 	debug("recv from %s:%d %d bytes", inet_ntoa(remote.sin_addr), ntohs(remote.sin_port), rc);
 	buffer_stream_dump(&ret_stream);
-	return krpc_bdecode(this, &ret_stream);
+	krpc_bdecode(this, &ret_stream);
 }
 
 void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target)

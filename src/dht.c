@@ -36,29 +36,6 @@ void gen_node_id(byte_t * id)
 	}
 }
 
-void print_ip(ip4_t _ip)
-{
-	byte_t * ip = (byte_t*)&_ip;
-	printf("%d.%d.%d.%d\n",
-			ip[0],
-			ip[1],
-			ip[2],
-			ip[3]
-			);
-}
-
-void print_hex(byte_t * bytes, int len)
-{
-	for (int i = 0 ; i < len; i++) {
-		printf("%02x", bytes[i]);
-	}
-	printf("\n");
-}
-
-void print_node_id(compacked_node_info_t node)
-{
-	print_hex(node.id, ID_LEN);
-}
 
 ip4_t get_ip_by_name(const char * name)
 {
@@ -75,6 +52,42 @@ int dht_init(dht_t * this)
 	gen_node_id(this->info.id);
 	return 1;
 }
+
+int dht_on_ping(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_find_node(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_get_peers(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_announce(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+
+
+int dht_on_ping_back(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_find_node_back(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_get_peers_back(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+int dht_on_announce_back(dht_t * this, krpc_msg_t * msg)
+{
+	return 1;
+}
+
 
 ///////////////////////////////////////
 
@@ -112,6 +125,19 @@ int main (int argc, char * argv[])
 
 	krpc_t krpc;
 	ok = krpc_init(&krpc, 1224);
+	krpc.callback_owner = &dht;
+
+	krpc.on_ping			= (krpc_callback_t)dht_on_ping;
+	krpc.on_find_node		= (krpc_callback_t)dht_on_find_node;
+	krpc.on_get_peers		= (krpc_callback_t)dht_on_get_peers;
+	krpc.on_announce_peer	= (krpc_callback_t)dht_on_announce;
+	
+	krpc.on_ping_back			= (krpc_callback_t)dht_on_ping_back;
+	krpc.on_find_node_back		= (krpc_callback_t)dht_on_find_node_back;
+	krpc.on_get_peers_back		= (krpc_callback_t)dht_on_get_peers_back;
+	krpc.on_announce_peer_back	= (krpc_callback_t)dht_on_announce_back;
+	
+
 	if (!ok) return 0;
 
 	buffer_stream_t bs;
