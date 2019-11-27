@@ -53,37 +53,48 @@ int dht_init(dht_t * this)
 	return 1;
 }
 
-int dht_on_ping(dht_t * this, krpc_msg_t * msg)
+int dht_on_ping(dht_t * this,krpc_t * krpc,  krpc_msg_t * msg)
 {
 	return 1;
 }
-int dht_on_find_node(dht_t * this, krpc_msg_t * msg)
+int dht_on_find_node(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
 {
 	return 1;
 }
-int dht_on_get_peers(dht_t * this, krpc_msg_t * msg)
+int dht_on_get_peers(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
 {
 	return 1;
 }
-int dht_on_announce(dht_t * this, krpc_msg_t * msg)
+int dht_on_announce(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
 {
 	return 1;
 }
 
 
-int dht_on_ping_back(dht_t * this, krpc_msg_t * msg)
+int dht_on_ping_back(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
+{
+	debug("recv ping back");
+	return 1;
+}
+int dht_on_find_node_back(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
+{
+	
+	for (int i = 0; i < msg->r.nodes_count; i++) {
+		compacked_node_info_t node = msg->r.nodes[i];
+		buffer_stream_t log;
+		buffer_stream_init(&log);
+		buffer_stream_print_ip(&log, node.peer.ip);
+		buffer_stream_printf(&log, ":%d", node.peer.port);
+		debug("%s", log.buf);
+		krpc_send_ping(krpc, this->info.id, node);
+	}
+	return 1;
+}
+int dht_on_get_peers_back(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
 {
 	return 1;
 }
-int dht_on_find_node_back(dht_t * this, krpc_msg_t * msg)
-{
-	return 1;
-}
-int dht_on_get_peers_back(dht_t * this, krpc_msg_t * msg)
-{
-	return 1;
-}
-int dht_on_announce_back(dht_t * this, krpc_msg_t * msg)
+int dht_on_announce_back(dht_t * this, krpc_t * krpc, krpc_msg_t * msg)
 {
 	return 1;
 }
@@ -155,10 +166,10 @@ int main (int argc, char * argv[])
 	krpc_recv_loop(&krpc);
 	
 	for (int i = 0; i < sizeof(boostrap_nodes)/sizeof(boostrap_nodes[0]); i++) {
-		compacked_node_info_t target = {0};
+		compacked_node_info_t target;
 		target.peer.ip = get_ip_by_name(boostrap_nodes[i].host_name);
 		target.peer.port = htons(boostrap_nodes[i].port);
-		krpc_send(&krpc, &msg, target);
+		krpc_send_find_node(&krpc, dht.info.id, dht.info.id, target);
 	}
 	while(1);
 	return 0;

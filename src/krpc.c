@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <unistd.h>
 
 
 char * const _q		= "q";
@@ -93,6 +94,19 @@ int buffer_stream_read(buffer_stream_t * this, byte_t * buf, int len)
 	return len;
 }
 
+int buffer_stream_write(buffer_stream_t * this, byte_t * buf, int len)
+{
+	if (!this || !buf || len <= 0) return 0;
+
+	if (this->len - this->w_pos < len) return 0;
+
+	memcpy(this->buf + this->r_pos, buf, len);
+	
+	this->w_pos += len;
+	return len;
+}
+
+
 typedef enum {
 	MATCH_MOVE,
 	MATCH_PEEK,
@@ -138,31 +152,6 @@ void buffer_stream_dump(buffer_stream_t * this)
 	}
 	printf("\n");
 }
-
-int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
-{
-	buffer_stream_printf(bs,"d1:ad2:id20:");
-	buffer_stream_printf_node_id(bs, msg->a.id);
-
-	if (msg->q == _ping) {
-
-	}else if (msg->q == _find_node) {
-		buffer_stream_printf(bs, "6:target20:");
-		buffer_stream_printf_node_id(bs, msg->a.target);
-		buffer_stream_printf(bs,"e");
-	}else if (msg->q == _get_peers) {
-		buffer_stream_printf(bs, "9info_hash20:");
-		buffer_stream_printf_node_id(bs, msg->a.info_hash);
-		buffer_stream_printf(bs,"e");
-	}else if (msg->q == _announce_peer) {
-
-	}
-	if (!msg->q) return 0;
-	int op_len = strlen(msg->q);
-	buffer_stream_printf(bs, "1:q%d:%s", op_len, msg->q);
-	return 1;
-}
-
 void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 {
 	if (!bs ) return;
@@ -182,6 +171,7 @@ void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 				}
 				buffer_stream_read(bs, ret->r.id, ID_LEN);
 
+				ret->r.nodes_count = 0;
 				krpc_callback_t callback = this->on_ping_back;
 				if (buffer_stream_match(bs, "5:nodes")) {
 					ret->r.with_peers = 0;
@@ -213,6 +203,10 @@ void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 				}
 
 				if (buffer_stream_match(bs, "6:values")) {
+					if (ret->r.nodes_count != 0) {
+						debug("error while parse values");
+						return;
+					}
 					int bytes_count = buffer_stream_get_int(bs);
 					ret = realloc(ret, sizeof(krpc_t) + bytes_count);
 					ret->r.peers_count = bytes_count/sizeof(compacked_peer_info_t);
@@ -220,8 +214,8 @@ void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 				}
 
 				if (buffer_stream_match(bs, "e1:t")) {
-					if (this->callback_owner &&  this->on_find_node_back) {
-						this->on_find_node_back(this->callback_owner, ret);
+					if (this->callback_owner &&  callback) {
+						callback(this->callback_owner,this, ret);
 					}
 					debug("response end");	
 				}else {
@@ -242,16 +236,54 @@ void krpc_bdecode(krpc_t * this, buffer_stream_t * bs)
 	}
 }
 
+
+int bencode_query(krpc_msg_t * msg, buffer_stream_t * bs)
+{
+	buffer_stream_printf(bs,"ad2:id20:");
+	buffer_stream_printf_node_id(bs, msg->a.id);
+
+	if (msg->q == _ping) {
+
+	}else if (msg->q == _find_node) {
+		buffer_stream_printf(bs, "6:target20:");
+		buffer_stream_printf_node_id(bs, msg->a.target);
+		buffer_stream_printf(bs,"e");
+	}else if (msg->q == _get_peers) {
+		buffer_stream_printf(bs, "9info_hash20:");
+		buffer_stream_printf_node_id(bs, msg->a.info_hash);
+		buffer_stream_printf(bs,"e");
+	}else if (msg->q == _announce_peer) {
+		buffer_stream_printf(bs, "12:implied_porti%de",msg->a.implied_port);
+		
+		buffer_stream_printf(bs, "9info_hash20:");
+		buffer_stream_printf_node_id(bs, msg->a.info_hash);
+		buffer_stream_printf(bs,"e");
+
+		buffer_stream_printf(bs, "4:porti%de5:token%d", msg->a.port, msg->a.token_len);
+		buffer_stream_write(bs, msg->a.token, msg->a.token_len);
+	
+	}
+	if (!msg->q) return 0;
+	int op_len = strlen(msg->q);
+	buffer_stream_printf(bs, "1:q%d:%s", op_len, msg->q);
+	return 1;
+}
+
+int  bencode_response(krpc_msg_t * msg, buffer_stream_t * bs)
+{
+}
+
 int krpc_bencode(krpc_t * this, krpc_msg_t * msg, buffer_stream_t * bs)
 {
 	if (!bs) return 0;
+	buffer_stream_printf(bs, "d1:");
 	if (msg->y == _q) {
-		this->msg_type[msg->t] = msg->y;
 		bencode_query(msg, bs);
-		buffer_stream_printf(bs, "1:t2:%c%c", ((char*)&msg->t)[0], ((char*)&msg->t)[1]);
-		//buffer_stream_print_hex(bs, (byte_t*)&msg->t, 2);
+		buffer_stream_printf(bs, "1:t%d:", msg->t_len);
+		buffer_stream_write(bs, msg->t, msg->t_len);
 		buffer_stream_printf(bs,"1:y1:%se", msg->y);
 	}else if (msg->y == _r) {
+		bencode_response(msg, bs);
 	}else if (msg->y == _e) {
 	}
 
@@ -317,8 +349,9 @@ void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target)
 		debug("无可用消息号");
 		return;
 	}
-	msg->t = this->cur_t;
-	this->msg_type[msg->t] = msg->y;
+	*(unsigned short*)&msg->t = this->cur_t;
+	msg->t_len = sizeof(this->cur_t);
+	this->msg_type[this->cur_t] = msg->y;
 	this->cur_t = (this->cur_t+1)%T_MAX;
 
 	buffer_stream_t data;
@@ -339,6 +372,29 @@ void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target)
 		buffer_stream_dump(&data);
 	}
 }
+
+void krpc_send_ping(krpc_t * this,node_id_t id, compacked_node_info_t target)
+{
+	krpc_msg_t msg;
+	msg.y = _q;
+	msg.q = _ping;
+	memcpy(msg.a.id ,id, ID_LEN);
+	krpc_send(this, &msg, target);
+}
+
+void krpc_send_find_node(krpc_t * this, node_id_t id, node_id_t target_id, compacked_node_info_t target)
+{
+	krpc_msg_t msg = {
+		.y = _q,
+		.q = _find_node,
+	};
+
+	memcpy(msg.a.id, id, ID_LEN);
+	memcpy(msg.a.target, target_id, ID_LEN);
+
+	krpc_send(this, &msg, target);
+}
+
 void * krpc_background_loop(krpc_t * this)
 {
 	while (1) {

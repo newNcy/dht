@@ -13,19 +13,30 @@
 #include <sys/cdefs.h>
 #include <arpa/inet.h>
 
-
-typedef struct sockaddr_in sockaddr_in;
-typedef struct sockaddr sockaddr;
-typedef unsigned char byte_t;
-typedef int32_t ip4_t;
-
 #define BIT_LEN 160
 #define ID_LEN (BIT_LEN/8)
 #define K 8
 #define MSG_LEN_MAX 512
 #define debug(f, ...) fprintf(stdout, "[debug] -- " f "\n", ##__VA_ARGS__)
 #define T_MAX 0xffff
+#define T_LEN_MAX 32
 #define TOKEN_LEN_MAX 32
+
+
+static void * _new_operator(unsigned long size)
+{
+	void * ret = malloc(size);
+	memset(ret, 0, size);
+	return ret;
+}
+#define new(Type) (_new_operator(sizeof(Type)))
+
+typedef struct sockaddr_in sockaddr_in;
+typedef struct sockaddr sockaddr;
+typedef unsigned char byte_t;
+typedef byte_t node_id_t[ID_LEN];
+typedef node_id_t info_hash_t;
+typedef int32_t ip4_t;
 //////////////////////////////////////
 //			krpc消息				//
 //////////////////////////////////////
@@ -59,7 +70,7 @@ typedef struct
 
 typedef struct //in network byte order
 {
-	byte_t id[ID_LEN];
+	node_id_t id;	
 	compacked_peer_info_t peer;
 }__attribute__((packed)) compacked_node_info_t ;
 
@@ -88,17 +99,18 @@ typedef struct
 
 typedef struct
 {
-	byte_t id[ID_LEN]; //ping
+	node_id_t id;
 	union 
 	{
-		byte_t target[ID_LEN]; //find_node
+		node_id_t target;
 		struct 
 		{
-			byte_t info_hash[ID_LEN];	// get_peers
+			info_hash_t info_hash;	
 			struct 
 			{					//announce_peer
 				int implied_port;
 				unsigned short port;
+				int token_len;
 				byte_t token[TOKEN_LEN_MAX];
 			};
 		};
@@ -107,7 +119,7 @@ typedef struct
 
 typedef	struct 
 {
-	byte_t id[ID_LEN]; //ping ret
+	node_id_t id;
 	int token_len;
 	byte_t token[TOKEN_LEN_MAX];
 	int with_peers;
@@ -133,7 +145,8 @@ typedef struct
 
 typedef struct 
 {
-	unsigned short t;
+	int t_len;
+	byte_t t[T_LEN_MAX];
 	char * y;
 	union 
 	{
@@ -147,10 +160,11 @@ typedef struct
 }krpc_msg_t;
 
 
+struct  krpc_t;
 
-typedef int (*krpc_callback_t) (void * owner, krpc_msg_t * msg);
+typedef int (*krpc_callback_t) (void * owner, struct krpc_t * krpc, krpc_msg_t * msg);
 
-typedef struct 
+typedef struct  krpc_t
 {	
 	int socket_fd;
 	unsigned short cur_t;
@@ -189,6 +203,38 @@ void buffer_stream_dump(buffer_stream_t * this);
 //				krpc接口			//
 //////////////////////////////////////
 int krpc_init(krpc_t * this, unsigned short port);
+
+void krpc_send_ping(krpc_t * this, node_id_t id, compacked_node_info_t target);
+void krpc_send_find_node(krpc_t * this, node_id_t id, node_id_t target_id, compacked_node_info_t target); 
+void krpc_send_get_peers(krpc_t * this, node_id_t id, info_hash_t info_hash, compacked_node_info_t target);
+void krpc_send_announce_peer(
+		krpc_t * this,
+		node_id_t id,
+		int implied_port,
+		info_hash_t info_hash,
+		unsigned short port,
+		byte_t * token,
+		int token_len,
+		compacked_node_info_t target
+		);
+void krpc_send_ping_back(krpc_t * this, node_id_t id, compacked_node_info_t target);
+void krpc_send_find_node_back(krpc_t * this, node_id_t id, compacked_node_info_t *nodes, int nodes_count, compacked_node_info_t target); 
+
+void krpc_send_get_peers_back_with_nodes(krpc_t * this, node_id_t id, compacked_node_info_t * nodes,int nodes_count, compacked_node_info_t target );
+
+void krpc_send_get_peers_back_with_peers(krpc_t * this, node_id_t id, compacked_peer_info_t * peers,int peers_count, compacked_node_info_t target );
+
+void krpc_send_announce_peer_back(
+		krpc_t * this,
+		node_id_t id,
+		int implied_port,
+		info_hash_t info_hash,
+		unsigned short port,
+		byte_t * token,
+		int token_len
+		);
+
+
 void krpc_send(krpc_t * this, krpc_msg_t * msg, compacked_node_info_t target);
 void krpc_recv(krpc_t * this);
 void krpc_recv_loop(krpc_t * this);
