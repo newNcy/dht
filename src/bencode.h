@@ -9,16 +9,35 @@ enum class BType
 };
 
 
-
-
 struct BValue
 {
     typedef std::string BString;
     typedef int BInteger;
     typedef std::vector<BValue> BList;
     typedef std::map<std::string,BValue> BDict;
+    
+    struct Iterator
+    {
+        BType type;
+        bool operator != (const Iterator & other)
+        {
+            return type != other.type || listIter != other.listIter || dictIter != other.dictIter;
+        }
+        
+        void operator ++ ()
+        {
+            if (type == BType::DICT) {
+                ++ dictIter;
+            }else if (type == BType::LIST) {
+                ++ listIter;
+            }
+        }
 
-    BType type;
+        BList::iterator listIter;
+        BDict::iterator dictIter;
+    };
+
+    BType type = BType::NONE;
     union
     {
         BString vString;
@@ -36,10 +55,15 @@ struct BValue
         if (type != this->type) {
             release();
             this->type = type;
+            if (type == BType::LIST) {
+                vList = new BList;
+            }else if (type == BType::DICT) {
+                vDict = new BDict;
+            }
         }
     }
 
-    BValue() {}
+    BValue():vDict(nullptr){}
     BValue(const std::string & value);
     BValue(const char * value);
     BValue(int value);
@@ -64,6 +88,9 @@ struct BValue
         resetType(BType::LIST);
         return vList->push_back(value);
     }
+
+    Iterator begin() { return {type, vList->begin(), vDict->begin()}; }
+    Iterator end() { return {type, vList->end(), vDict->end()}; }
 
     ~BValue();
 };

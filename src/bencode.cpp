@@ -1,4 +1,5 @@
 #include "bencode.h"
+#include <sstream>
 
 BValue::BValue(const std::string & value):type(BType::STRING), vString(value) {}
 BValue::BValue(const char * value):type(BType::STRING), vString(value) {}
@@ -41,31 +42,36 @@ BValue & BValue::operator = (const BValue & value)
 
 BValue & BValue::operator = (const std::string & value)
 {
-    *this = value;
+    resetType(BType::STRING);
+    vString = value;
     return *this;
 }
 
 BValue & BValue::operator = (const char * value)
 {
-    *this = value;
+    resetType(BType::STRING);
+    vString = value;
     return *this;
 }
 
 BValue & BValue::operator = (int value)
 {
-    *this = value;
+    resetType(BType::INTEGER);
+    vInteger = value;
     return *this;
 }
 
 BValue & BValue::operator = (const BList & value)
 {
-    *this = value;
+    resetType(BType::LIST);
+    *vList = value;
     return *this;
 }
 
 BValue & BValue::operator = (const BDict & value)
 {
-    *this = value;
+    resetType(BType::DICT);
+    *vDict = value;
     return *this;
 }
 
@@ -74,7 +80,26 @@ BValue::~BValue()
     release();
 }
 
-std::string encode() const;
-bool decode(const std::string & body);
+std::string BValue::encode() const
+{
+    std::stringstream ss;
+    if (type == BType::STRING)
+    {
+        return vString;
+    } else if (type == BType::INTEGER) {
+        ss<<vInteger;
+        return ss.str();
+    } 
+
+    for (auto & v : const_cast<BValue&>(*this)) {
+        ss<<v.encode();
+    }
+    return ss.str();
+}
+
+bool BValue::decode(const std::string & body)
+{
+    return true;
+}
 
 
