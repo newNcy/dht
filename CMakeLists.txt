@@ -1,17 +1,14 @@
 
-
+cmake_minimum_required(VERSION 3.8)
 project(dht)
 
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS on)
-
-add_definitions(-g -std=c99)
-include_directories(src)
+set(CMAKE_CXX_STANDARD 14)
 
 
 add_executable(dht 
-	src/dht.c
-	src/krpc.c
-	)
+    src/main.cpp
+    src/network.cpp
+    src/bencode.cpp
+    )
 
-target_link_libraries(dht crypto pthread)
+target_link_libraries(dht Ws2_32)

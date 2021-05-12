@@ -1,0 +1,6 @@
+{
+	"mode":"debug",
+	"debug":"build",
+	"release":"build-release",
+	"generator":"MinGW Makefiles"
+}
