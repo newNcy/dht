@@ -14,8 +14,13 @@ struct BValue
     typedef std::string BString;
     typedef int BInteger;
     typedef std::vector<BValue> BList;
-    typedef std::map<std::string,BValue> BDict;
-    
+    typedef std::map<BString,BValue> BDict;
+	struct IterValue
+	{
+		const std::string & key;
+		const BValue & value;
+	};
+
     struct Iterator
     {
         BType type;
@@ -33,6 +38,15 @@ struct BValue
             }
         }
 
+		const IterValue operator * () 
+		{
+			if (type == BType::LIST) {
+				return {"", *listIter};
+            } else {
+				return {dictIter->first, dictIter->second};
+            }
+		}
+
         BList::iterator listIter;
         BDict::iterator dictIter;
     };
@@ -40,8 +54,8 @@ struct BValue
     BType type = BType::NONE;
     union
     {
-        BString vString;
         BInteger vInteger;
+        BString * vString;
         BList * vList;
         BDict * vDict;
     };
@@ -59,7 +73,9 @@ struct BValue
                 vList = new BList;
             }else if (type == BType::DICT) {
                 vDict = new BDict;
-            }
+            }else if (type == BType::STRING) {
+				vString = new BString;
+			}
         }
     }
 
@@ -81,7 +97,7 @@ struct BValue
     BValue & operator[](const std::string & key) 
     { 
         resetType(BType::DICT);
-        return (*vDict)[key]; 
+        return vDict->operator[](key); 
     }
     void push (const BValue & value) 
     { 
