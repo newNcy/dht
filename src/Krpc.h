@@ -16,7 +16,7 @@ struct Id
 		}
 		return id;
 	}
-	std::string toString() const 
+	std::string toHexString() const 
 	{
 		char buff[41] = {0};
 		for (int i = 0; i < LEN; ++ i) {
@@ -24,6 +24,12 @@ struct Id
 		}
 		return buff;
 	}
+
+	std::string toString() const 
+	{
+		return std::string((char *)(bytes), LEN);
+	}
+
 	void fromBuffer(unsigned char * buffer)
 	{
 		memcpy(bytes, buffer, LEN);

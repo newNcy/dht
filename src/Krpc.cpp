@@ -31,7 +31,7 @@ void Krpc::recvBack()
 KrpcMessage Krpc::rpc(const KrpcMessage & msg, const Node & target)
 {
 	auto encodedMsg = msg.encode();
-	printf("send %s\n", encodedMsg.c_str());
+	printf("send %s %d\n ", encodedMsg.c_str(), encodedMsg.length());
 	fflush(stdout);
 	network::sendto(socketfd, target.peer.ip, target.peer.port, encodedMsg.c_str(), encodedMsg.length());
 
