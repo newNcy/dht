@@ -58,7 +58,7 @@ namespace network
 		return ::sendto(socketfd, bytes, length, 0, (sockaddr*)&addr, sizeof(addr));
 	}
 
-	uint32_t recvfrom(int socketfd, Ip4 ip, unsigned port,char * bytes, uint32_t length, sockaddr_in & addr)
+	uint32_t recvfrom(int socketfd,char * bytes, uint32_t length, sockaddr_in & addr)
 	{
 		int addrLen = sizeof(addr);
 		return ::recvfrom(socketfd, bytes, length, 0, (sockaddr*)&addr, &addrLen);

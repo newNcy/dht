@@ -53,7 +53,7 @@ KrpcMessage Krpc::rpc(const KrpcMessage & msg, const Node & target)
 	sockaddr_in  addr;
 	int rc;
 	for (;;) {
-		rc = network::recvfrom(socketfd, target.peer.ip, target.peer.port, buff, 512, addr);
+		rc = network::recvfrom(socketfd, buff, 512, addr);
 		if (rc) {
 			break;
 		}

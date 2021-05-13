@@ -33,5 +33,5 @@ namespace network
 
 	Ip4 getip(const std::string & name);
 	uint32_t sendto(int socketfd, Ip4 ip, unsigned port,const char * bytes, uint32_t length);
-	uint32_t recvfrom(int socketfd, Ip4 ip, unsigned port, char * bytes, uint32_t length, sockaddr_in & addr);
+	uint32_t recvfrom(int socketfd, char * bytes, uint32_t length, sockaddr_in & addr);
 }
