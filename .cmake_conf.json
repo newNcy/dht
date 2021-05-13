@@ -1,1 +1,1 @@
-{"target_dirs":{"dht":"."},"targets":["dht","all"]}
+{"target_dirs":{"dht":".","bencoding":".","test_bencoding":"test"},"targets":["dht","all","bencoding","test_bencoding"]}
