@@ -19,4 +19,7 @@ add_executable(dht
 
 add_subdirectory(test)
 
-target_link_libraries(dht Ws2_32 bencoding crypto)
+target_link_libraries(dht bencoding crypto)
+if (WIN32)
+	target_link_libraries(dht Ws2_32)
+endif()

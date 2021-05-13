@@ -48,6 +48,7 @@ KrpcMessage Krpc::rpc(const KrpcMessage & msg, const Node & target)
 	KrpcMessage ret;
 	int pos = 0;
 	ret.decode(buff, pos);
+	printf("recv %d %s\n", rc, buff);
 	return ret;
 }
 

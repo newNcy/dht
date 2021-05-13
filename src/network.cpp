@@ -7,6 +7,8 @@ namespace network
 #ifdef _WIN32
         WSADATA data;
         return WSAStartup(MAKEWORD(2, 2), &data) == 0;
+#else
+		return true;
 #endif
     }
 
@@ -58,7 +60,7 @@ namespace network
 
 	uint32_t recvfrom(int socketfd, Ip4 ip, unsigned port,char * bytes, uint32_t length, sockaddr_in & addr)
 	{
-		int addrLen = sizeof(addr);
+		unsigned int addrLen = sizeof(addr);
 		return ::recvfrom(socketfd, bytes, length, 0, (sockaddr*)&addr, &addrLen);
 	}
 }
