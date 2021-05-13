@@ -105,6 +105,9 @@ std::string BValue::encode() const
 
 bool BValue::decode(const std::string & bytes, int & pos)
 {
+	if (bytes.length() < 1) {
+		return false;
+	}
 	auto readInt = [&]()
 	{
 		int ret = 0;

@@ -10,6 +10,9 @@ int main ()
     BValue bdict = 1;
     BValue blist;
     bdict["a"] = "aa";
+    bdict["t"] = std::string(2, 0);
+	unsigned short t = 0x3456;
+    bdict["t"] = std::string((char*)&t, 2);
     bdict["b"] = 1;
     bdict["c"] = blist;
     bdict["d"] = bdict;

@@ -105,8 +105,14 @@ struct BValue
         return vList->push_back(value);
     }
 
+	bool valid() const { return type != BType::NONE; }
     Iterator begin() { return {type, vList->begin(), vDict->begin()}; }
     Iterator end() { return {type, vList->end(), vDict->end()}; }
+
+	const BInteger getInteger() const { return vInteger; }
+	const BString & getString() const { return *vString; }
+	const BList& getList() const { return *vList; }
+	const BDict& getDict() const { return *vDict; }
 
     ~BValue();
 };

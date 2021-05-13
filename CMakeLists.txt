@@ -22,4 +22,7 @@ add_subdirectory(test)
 target_link_libraries(dht bencoding crypto)
 if (WIN32)
 	target_link_libraries(dht Ws2_32)
+elseif (UNIX)
+	target_link_libraries(dht pthread)
 endif()
+
