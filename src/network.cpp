@@ -60,7 +60,11 @@ namespace network
 
 	uint32_t recvfrom(int socketfd,char * bytes, uint32_t length, sockaddr_in & addr)
 	{
+#ifdef _WIN32
 		int addrLen = sizeof(addr);
+#else 
+		socklen_t addrLen = sizeof(addr);
+#endif
 		return ::recvfrom(socketfd, bytes, length, 0, (sockaddr*)&addr, &addrLen);
 	}
 }
