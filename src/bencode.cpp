@@ -1,6 +1,7 @@
 #include "bencode.h"
 #include <sstream>
 #include <string>
+#include <cctype>
 
 BValue::BValue(const std::string & value):type(BType::STRING), vString(new BString(value)) {}
 BValue::BValue(const char * value):type(BType::STRING), vString(new BString(value)) {}
@@ -102,8 +103,48 @@ std::string BValue::encode() const
     return ss.str();
 }
 
-bool BValue::decode(const std::string & body)
+bool BValue::decode(const std::string & bytes, int & pos)
 {
+	auto readInt = [&]()
+	{
+		int ret = 0;
+		while (pos < bytes.length() && std::isdigit(bytes[pos])) {
+			ret = ret * 10 + bytes[pos] - '0';
+			pos ++;
+		}
+
+		return ret;
+	};
+	switch(bytes[pos++])
+	{
+		case 'i': 
+			*this = readInt();
+			pos ++;
+			break;
+		case 'l': 
+			while (pos != bytes.length() && bytes[pos] != 'e') {
+				BValue value;
+				value.decode(bytes, pos);
+				push(value);
+			}
+			if (pos != bytes.length()) pos ++;
+			break;
+		case 'd':
+			while (pos != bytes.length() && bytes[pos] != 'e') {
+				BValue key, value;
+				key.decode(bytes, pos);
+				value.decode(bytes, pos);
+				this->operator [] (*key.vString) = value;
+			}
+			if (pos != bytes.length()) pos ++;
+			break;
+		default: 
+			--pos;
+			int length = readInt();
+			* this = BString(bytes, pos + 1, length);
+			pos += length + 1;
+			break;
+	}
     return true;
 }
 

@@ -61,7 +61,7 @@ struct BValue
     };
 
     std::string encode() const;
-    bool decode(const std::string & body);
+    bool decode(const std::string & body, int & start);
 
     void release();
     void resetType(BType type)

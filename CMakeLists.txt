@@ -14,8 +14,9 @@ add_library(bencoding src/bencode.cpp)
 add_executable(dht 
     src/main.cpp
     src/network.cpp
+    src/Krpc.cpp
     )
 
 add_subdirectory(test)
 
-target_link_libraries(dht Ws2_32 bencoding)
+target_link_libraries(dht Ws2_32 bencoding crypto)
