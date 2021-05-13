@@ -21,6 +21,13 @@ Krpc::Krpc()
 {
 	self.id = generateID("crawler");
 	socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(1224);
+
+    bind (socketfd, (sockaddr*)&addr, sizeof(addr));
 }
 		
 void Krpc::recvBack()
@@ -31,7 +38,14 @@ void Krpc::recvBack()
 KrpcMessage Krpc::rpc(const KrpcMessage & msg, const Node & target)
 {
 	auto encodedMsg = msg.encode();
-	printf("send %s %d\n ", encodedMsg.c_str(), encodedMsg.length());
+	printf("send to %s %d %d bytes\n ", network::Ip4(target.peer.ip).toString().c_str(), target.peer.port, encodedMsg.length());
+    for (int i = 0 ; i < encodedMsg.length(); ++ i) {
+        unsigned c = 0xff & encodedMsg[i];
+        if (0x20 <= c && c <= 0x7e)
+            printf(" %c ", c);
+        else
+            printf("%02x ", c);
+    }
 	fflush(stdout);
 	network::sendto(socketfd, target.peer.ip, target.peer.port, encodedMsg.c_str(), encodedMsg.length());
 

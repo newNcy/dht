@@ -45,7 +45,7 @@ namespace network
 		sockaddr_in addr;
 		addr.sin_family = AF_INET;
 		addr.sin_addr.s_addr = ip;
-		addr.sin_port = port;
+		addr.sin_port = htons(port);
 		
 		return addr;
 	}
@@ -60,7 +60,7 @@ namespace network
 
 	uint32_t recvfrom(int socketfd, Ip4 ip, unsigned port,char * bytes, uint32_t length, sockaddr_in & addr)
 	{
-		unsigned int addrLen = sizeof(addr);
+		int addrLen = sizeof(addr);
 		return ::recvfrom(socketfd, bytes, length, 0, (sockaddr*)&addr, &addrLen);
 	}
 }
