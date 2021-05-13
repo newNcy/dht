@@ -5,18 +5,6 @@
 #include <unistd.h>
 
 
-char * const _q		= "q";
-char * const _r		= "r";
-char * const _e		= "e";
-char * const _failed = "failed";
-
-char * const _ping			= "ping";
-char * const _find_node		= "find_node";
-char * const _get_peers		= "get_peers";
-char * const _announce_peer	= "announce_peer";
-
-
-
 void buffer_stream_init(buffer_stream_t * this)
 {
 	if (!this) return;

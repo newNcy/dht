@@ -42,15 +42,15 @@ typedef int32_t ip4_t;
 //////////////////////////////////////
 
 
-char * const _q;
-char * const _r;
-char * const _e;
-char * const _failed;
+static char * const _q		= "q";
+static char * const _r		= "r";
+static char * const _e		= "e";
+static char * const _failed = "failed";
 
-char * const _ping;
-char * const _find_node;
-char * const _get_peers;
-char * const _announce_peer;
+static char * const _ping			= "ping";
+static char * const _find_node		= "find_node";
+static char * const _get_peers		= "get_peers";
+static char * const _announce_peer	= "announce_peer";
 
 typedef struct
 {
